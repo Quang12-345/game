@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'list_screen.dart'; // Import màn hình danh sách cược tại đây
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -50,10 +51,13 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 
     if (_users.containsKey(username) && _users[username] == password) {
       _showMessage('Đăng nhập thành công!');
-      Navigator.pushReplacementNamed(
+
+      // Chuyển trực tiếp sang ListScreen thay vì gọi route chuỗi '/main' gây crash app
+      Navigator.pushReplacement(
         context,
-        '/main',
-        arguments: username,
+        MaterialPageRoute(
+          builder: (context) => const ListScreen(),
+        ),
       );
     } else {
       _showMessage('Tài khoản hoặc mật khẩu không đúng!');
@@ -81,17 +85,24 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     }
 
     _users[username] = password;
-    _showMessage('Đăng ký thành công! Vui lòng đăng nhập.');
-    _tabController.animateTo(0); // Chuyển về tab Đăng nhập
+    _showMessage('Đăng ký thành công! Vui lòng nhập mật khẩu để đăng nhập.');
+
+    // Tự điền thông tin vừa đăng ký vào form Đăng nhập và tự chuyển tab
     _loginUserCtrl.text = username;
+    _loginPassCtrl.clear();
     _regUserCtrl.clear();
     _regPassCtrl.clear();
     _regConfirmPassCtrl.clear();
+    _tabController.animateTo(0); // Chuyển về tab Đăng nhập
   }
 
   void _showMessage(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -114,7 +125,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           ],
         ),
       ),
-      // BỌC CONTAINER BACKGROUND GRADIENT TẠI ĐÂY
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -123,7 +133,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF0F2027), // Đen xanh đậm
+              Color(0xFF0F2027),
               Color(0xFF203A43),
               Color(0xFF2C5364),
             ],
