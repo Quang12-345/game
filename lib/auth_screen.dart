@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'list_screen.dart'; // Import màn hình danh sách cược tại đây
+import 'main_screen.dart'; // 👈 Nhớ import file MainScreen ở đầu file auth_screen.dart
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -52,11 +53,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     if (_users.containsKey(username) && _users[username] == password) {
       _showMessage('Đăng nhập thành công!');
 
-      // Chuyển trực tiếp sang ListScreen thay vì gọi route chuỗi '/main' gây crash app
+      // Chuyển sang màn hình TRANG CHỦ (MainScreen) thay vì ListScreen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const ListScreen(),
+          builder: (context) => const MainScreen(),
         ),
       );
     } else {

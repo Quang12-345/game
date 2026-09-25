@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-// 1. Model dữ liệu cho mỗi đối tượng đua (Xe / Ngựa)
+// Model dữ liệu cho mỗi đối tượng đua (Xe / Ngựa)
 class RaceItem {
   final int id;
   final String name;
   final String imagePath;
+  final double odds; // Tỷ lệ trả thưởng (Odds)
   double betAmount;
   bool isSelected;
 
@@ -12,6 +14,7 @@ class RaceItem {
     required this.id,
     required this.name,
     required this.imagePath,
+    required this.odds,
     this.betAmount = 0.0,
     this.isSelected = false,
   });
@@ -25,15 +28,25 @@ class ListScreen extends StatefulWidget {
 }
 
 class _ListScreenState extends State<ListScreen> {
-  // Số dư tài khoản mẫu
+  // Số dư tài khoản hiện tại
   double userBalance = 1000.0;
 
-  // Danh sách các đối tượng đua
-  List<RaceItem> raceList = [
-    RaceItem(id: 1, name: 'Xe 01 (Đỏ)', imagePath: 'assets/images/car_1.png'),
-    RaceItem(id: 2, name: 'Xe 02 (Xanh)', imagePath: 'assets/images/car_2.png'),
-    RaceItem(id: 3, name: 'Xe 03 (Vàng)', imagePath: 'assets/images/car_3.png'),
-  ];
+  // Danh sách các đối tượng đua với hệ số Odds tương ứng
+  late List<RaceItem> raceList;
+
+  @override
+  void initState() {
+    super.initState();
+    _initRaceList();
+  }
+
+  void _initRaceList() {
+    raceList = [
+      RaceItem(id: 0, name: 'Xe 01 (Đỏ)', imagePath: 'assets/images/car_1.png', odds: 1.5),
+      RaceItem(id: 1, name: 'Xe 02 (Xanh)', imagePath: 'assets/images/car_2.png', odds: 2.0),
+      RaceItem(id: 2, name: 'Xe 03 (Vàng)', imagePath: 'assets/images/car_3.png', odds: 3.0),
+    ];
+  }
 
   // Logic tính tổng tiền cược hiện tại
   double get totalBet {
@@ -43,23 +56,52 @@ class _ListScreenState extends State<ListScreen> {
   }
 
   // Xử lý nút START
-  void _onStartRace() {
-    if (totalBet <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn xe và nhập số tiền cược!')),
-      );
+  void _onStartRace() async {
+    List<RaceItem> selectedCars = raceList.where((item) => item.isSelected).toList();
+
+    // 1. Kiểm tra phải chọn ít nhất 1 xe
+    if (selectedCars.isEmpty) {
+      _showSnackBar('Vui lòng chọn ít nhất 1 xe để đặt cược!');
       return;
     }
 
+    // 2. Kiểm tra cược ít nhất 1$ cho mỗi xe đã chọn
+    for (var car in selectedCars) {
+      if (car.betAmount < 1.0) {
+        _showSnackBar('Mỗi xe đặt cược phải cược tối thiểu 1\$!');
+        return;
+      }
+    }
+
+    // 3. Kiểm tra tổng cược không được vượt quá số dư
     if (totalBet > userBalance) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Số dư không đủ để đặt cược!')),
-      );
+      _showSnackBar('Tổng tiền cược (\$${totalBet.toStringAsFixed(0)}) vượt quá số dư hiện tại (\$${userBalance.toStringAsFixed(0)})!');
       return;
     }
 
-    // Chuyển sang màn hình Đường đua
-    Navigator.pushNamed(context, '/race');
+    // Chuyển sang màn hình Đường đua và nhận lại số dư mới sau khi đua xong
+    final updatedBalance = await Navigator.pushNamed(
+      context,
+      '/race',
+      arguments: {
+        'raceList': raceList,
+        'userBalance': userBalance,
+      },
+    );
+
+    // Cập nhật lại số dư và reset cược nếu nhận được kết quả
+    if (updatedBalance != null && updatedBalance is double) {
+      setState(() {
+        userBalance = updatedBalance;
+        _onReset();
+      });
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
   }
 
   // Xử lý nút RESET
@@ -82,7 +124,6 @@ class _ListScreenState extends State<ListScreen> {
         centerTitle: true,
         elevation: 0,
       ),
-      // BỌC CONTAINER BACKGROUND GRADIENT TẠI ĐÂY
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -91,7 +132,7 @@ class _ListScreenState extends State<ListScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF141E30), // Deep Navy
+              Color(0xFF141E30),
               Color(0xFF243B55),
             ],
           ),
@@ -122,7 +163,7 @@ class _ListScreenState extends State<ListScreen> {
               ),
             ),
 
-            // Danh sách các làn đua / Xe đua
+            // Danh sách các xe đua
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -149,17 +190,37 @@ class _ListScreenState extends State<ListScreen> {
                             onChanged: (bool? value) {
                               setState(() {
                                 item.isSelected = value ?? false;
+                                if (!item.isSelected) {
+                                  item.betAmount = 0.0;
+                                }
                               });
                             },
                           ),
 
-                          // Icon / Tên xe
+                          // Icon / Tên xe & Odds
                           const Icon(Icons.directions_car, size: 36, color: Colors.cyanAccent),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              item.name,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.amber, width: 0.8),
+                                  ),
+                                  child: Text(
+                                    'Odds: x${item.odds}',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
@@ -167,12 +228,13 @@ class _ListScreenState extends State<ListScreen> {
                           SizedBox(
                             width: 100,
                             child: TextFormField(
-                              key: ValueKey(item.isSelected ? item.betAmount : 'reset_$index'),
+                              key: ValueKey('bet_${item.id}_${item.isSelected}'),
                               initialValue: item.betAmount > 0 ? item.betAmount.toStringAsFixed(0) : '',
                               keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                               style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
-                                hintText: 'Tiền cược',
+                                hintText: 'Min \$1',
                                 hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
                                 isDense: true,
                                 fillColor: Colors.black26,
@@ -182,11 +244,10 @@ class _ListScreenState extends State<ListScreen> {
                                 ),
                               ),
                               onChanged: (val) {
+                                double parsed = double.tryParse(val) ?? 0.0;
                                 setState(() {
-                                  item.betAmount = double.tryParse(val) ?? 0.0;
-                                  if (item.betAmount > 0) {
-                                    item.isSelected = true; // Tự động tích chọn khi nhập tiền
-                                  }
+                                  item.betAmount = parsed;
+                                  item.isSelected = parsed > 0;
                                 });
                               },
                             ),

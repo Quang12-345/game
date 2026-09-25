@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'audio_manager.dart';
+import 'list_screen.dart';
 
 class RaceScreen extends StatefulWidget {
   const RaceScreen({super.key});
@@ -16,22 +17,33 @@ class _RaceScreenState extends State<RaceScreen> {
   int? _winnerIndex;
   Timer? _timer;
 
-  // Cấu hình 3 nhân vật/xe đua phong cách Hoạt hình
-  final List<Map<String, dynamic>> _racers = [
-    {'name': 'Xe 1 - Đỏ', 'color': Colors.redAccent, 'icon': Icons.directions_car_filled},
-    {'name': 'Xe 2 - Xanh', 'color': Colors.lightBlueAccent, 'icon': Icons.sports_motorsports},
-    {'name': 'Xe 3 - Vàng', 'color': Colors.amberAccent, 'icon': Icons.electric_car},
+  List<RaceItem> _raceList = [];
+  double _userBalance = 0.0;
+  bool _isDataLoaded = false;
+
+  final List<Map<String, dynamic>> _racerUI = [
+    {'color': Colors.redAccent, 'icon': Icons.directions_car_filled},
+    {'color': Colors.lightBlueAccent, 'icon': Icons.sports_motorsports},
+    {'color': Colors.amberAccent, 'icon': Icons.electric_car},
   ];
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isDataLoaded) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null) {
+        _raceList = args['raceList'] as List<RaceItem>;
+        _userBalance = args['userBalance'] as double;
+      }
+      _isDataLoaded = true;
       _startRace();
-    });
+    }
   }
 
-  void _startRace() {
+  void _startRace() async {
+    _timer?.cancel();
+
     setState(() {
       _carPositions = [0.0, 0.0, 0.0];
       _isRacing = true;
@@ -42,13 +54,16 @@ class _RaceScreenState extends State<RaceScreen> {
       debugPrint("Lỗi âm thanh start: $e");
     });
 
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (!mounted) return;
+
       setState(() {
         for (int i = 0; i < 3; i++) {
           if (_carPositions[i] < 1.0) {
-            _carPositions[i] += Random().nextDouble() * 0.02 + 0.008;
+            _carPositions[i] += Random().nextDouble() * 0.05 + 0.02;
             if (_carPositions[i] >= 1.0) {
               _carPositions[i] = 1.0;
               if (_winnerIndex == null) {
@@ -69,38 +84,92 @@ class _RaceScreenState extends State<RaceScreen> {
       _isRacing = false;
     });
 
-    AudioManager().playWinSound().catchError((e) {
-      debugPrint("Lỗi âm thanh win: $e");
-    });
+    // --- LOGIC TÍNH TOÁN THẮNG / THUA VÀ CẬP NHẬT SỐ DƯ ---
+    double totalBetAmount = 0.0;
+    double totalWinAmount = 0.0;
 
-    _showResultDialog();
+    for (var car in _raceList) {
+      if (car.isSelected) {
+        totalBetAmount += car.betAmount;
+      }
+    }
+
+    // Trừ tổng tiền cược ban đầu
+    _userBalance -= totalBetAmount;
+
+    // Kiểm tra xe thắng cuộc có được đặt cược không
+    RaceItem winningCar = _raceList[_winnerIndex!];
+    bool isUserWin = winningCar.isSelected && winningCar.betAmount > 0;
+
+    if (isUserWin) {
+      // Tiền thắng = Tiền cược trên xe đó * Odds
+      totalWinAmount = winningCar.betAmount * winningCar.odds;
+      _userBalance += totalWinAmount;
+      AudioManager().playWinSound();
+    } else {
+      AudioManager().playLoseSound();
+    }
+
+    double netProfit = totalWinAmount - totalBetAmount;
+    _showResultDialog(winningCar, isUserWin, netProfit);
   }
 
-  void _showResultDialog() {
+  void _showResultDialog(RaceItem winningCar, bool isUserWin, double netProfit) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2E7D32),
+        backgroundColor: isUserWin ? const Color(0xFF1B5E20) : const Color(0xFFB71C1C),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.amber, width: 3),
+          side: BorderSide(color: isUserWin ? Colors.amber : Colors.white24, width: 3),
         ),
-        title: const Center(
+        title: Center(
           child: Text(
-            '🏆 KẾT QUẢ CUỘC ĐUA',
-            style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 22),
+            isUserWin ? '🎉 BẠN ĐÃ THẮNG! 🎉' : '❌ BẠN ĐÃ THUA! ❌',
+            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 22),
           ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.emoji_events, color: Colors.amber, size: 60),
+            Icon(
+              isUserWin ? Icons.emoji_events : Icons.sentiment_very_dissatisfied,
+              color: Colors.amber,
+              size: 60,
+            ),
             const SizedBox(height: 10),
             Text(
-              '${_racers[_winnerIndex!]['name']}\nĐÃ VỀ ĐÍCH ĐẦU TIÊN!',
-              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              '${winningCar.name}\nĐÃ VỀ ĐÍCH ĐẦU TIÊN! (x${winningCar.odds})',
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 15),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    isUserWin
+                        ? 'Lợi nhuận: +\$${netProfit.toStringAsFixed(0)}'
+                        : 'Tiền cược đã mất: -\$${netProfit.abs().toStringAsFixed(0)}',
+                    style: TextStyle(
+                      color: isUserWin ? Colors.greenAccent : Colors.orangeAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Số dư mới: \$${_userBalance.toStringAsFixed(0)}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -108,8 +177,8 @@ class _RaceScreenState extends State<RaceScreen> {
         actions: [
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(context); // Đóng Dialog
+              Navigator.pop(context, _userBalance); // Trả số dư mới về ListScreen
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.amber,
@@ -117,7 +186,7 @@ class _RaceScreenState extends State<RaceScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('CHƠI LẠI / ĐẶT CƯỢC', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('XÁC NHẬN / QUAY VỀ', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -127,7 +196,6 @@ class _RaceScreenState extends State<RaceScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    AudioManager().stopSound();
     super.dispose();
   }
 
@@ -136,22 +204,18 @@ class _RaceScreenState extends State<RaceScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. TỰ VẼ HÌNH NỀN TRƯỜNG ĐUA SÂN CỎ 2D CARTOON
           CustomPaint(
             size: Size.infinite,
             painter: CartoonRaceTrackPainter(),
           ),
-
-          // 2. PHẦN GIAO DIỆN CHÍNH
           SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 15),
-                // TIÊU ĐỀ HOẠT HÌNH GO!
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.orange, // 👈 Đã sửa Colors.orangeBold -> Colors.orange
+                    color: Colors.orange,
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(color: Colors.white, width: 3),
                     boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
@@ -161,14 +225,12 @@ class _RaceScreenState extends State<RaceScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
-                      fontWeight: FontWeight.w900, // 👈 Đã sửa FontWeight.black -> FontWeight.w900
+                      fontWeight: FontWeight.w900,
                       letterSpacing: 1.5,
                     ),
                   ),
                 ),
                 const SizedBox(height: 25),
-
-                // KHU VỰC 3 LÀN ĐƯỜNG ĐUA
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -186,116 +248,118 @@ class _RaceScreenState extends State<RaceScreen> {
     );
   }
 
-  // LÀN ĐƯỜNG ĐUA HOẠT HÌNH CÓ CỔNG VẠCH ĐÍCH CỜ CARO
   Widget _buildCartoonLane(int index) {
     double progress = _carPositions[index];
-    var racer = _racers[index];
+    var racerData = _racerUI[index];
+    RaceItem? racer = _raceList.length > index ? _raceList[index] : null;
 
     return Container(
       height: 90,
       decoration: BoxDecoration(
-        color: const Color(0xFFD7CCC8), // Màu đất trường đua
+        color: const Color(0xFFD7CCC8),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF5D4037), width: 3), // Rào gỗ
+        border: Border.all(color: const Color(0xFF5D4037), width: 3),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 4))],
       ),
-      child: Stack(
-        children: [
-          // Vạch đường đứt nét
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(
-                8,
-                    (i) => Container(width: 20, height: 4, color: Colors.white54),
-              ),
-            ),
-          ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double trackWidth = constraints.maxWidth;
+          double carSize = 44.0;
+          double maxDistance = trackWidth - carSize - 30;
+          double leftPosition = progress * maxDistance;
 
-          // CỔNG VẠCH ĐÍCH CỜ CARO ĐỎ - TRẮNG
-          Positioned(
-            right: 15,
-            top: 0,
-            bottom: 0,
-            child: Container(
-              width: 12,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  left: BorderSide(color: Colors.red, width: 6),
-                  right: BorderSide(color: Colors.white, width: 6),
+          return Stack(
+            children: [
+              // Vạch đường đứt nét
+              Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(
+                    8,
+                        (i) => Container(width: 20, height: 4, color: Colors.white54),
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // TÊN XE
-          Positioned(
-            left: 10,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                racer['name'],
-                style: TextStyle(
-                  color: racer['color'],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+              // CỔNG VẠCH ĐÍCH
+              Positioned(
+                right: 15,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  width: 12,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      left: BorderSide(color: Colors.red, width: 6),
+                      right: BorderSide(color: Colors.white, width: 6),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // XE ĐUA HOẠT HÌNH DI CHUYỂN
-          LayoutBuilder(
-            builder: (context, constraints) {
-              double maxDistance = constraints.maxWidth - 65;
-              double leftPosition = progress * maxDistance;
+              // TÊN XE & ODDS
+              Positioned(
+                left: 10,
+                top: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    racer != null ? '${racer.name} (x${racer.odds})' : 'Xe ${index + 1}',
+                    style: TextStyle(
+                      color: racerData['color'],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
 
-              return Positioned(
-                left: leftPosition,
+              // XE ĐUA DI CHUYỂN
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 100),
+                curve: Curves.linear,
+                left: max(0.0, leftPosition),
                 bottom: 10,
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  width: carSize,
+                  height: carSize,
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: racer['color'],
+                    color: racerData['color'],
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                     boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
                   ),
                   child: Icon(
-                    racer['icon'],
+                    racerData['icon'],
                     color: Colors.white,
-                    size: 28,
+                    size: 24,
                   ),
                 ),
-              );
-            },
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-// BỘ VẼ HÌNH NỀN TRƯỜNG ĐUA SÂN CỎ BẰNG CODE FLUTTER
 class CartoonRaceTrackPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Nền cỏ xanh tươi
     final Paint grassPaint = Paint()..color = const Color(0xFF4CAF50);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), grassPaint);
 
-    // 2. Vẽ đồi núi / Lùm cây hoạt hình phía trên
     final Paint hillPaint = Paint()..color = const Color(0xFF388E3C);
     canvas.drawCircle(Offset(size.width * 0.2, 0), 120, hillPaint);
     canvas.drawCircle(Offset(size.width * 0.8, 0), 150, hillPaint);
 
-    // 3. Vẽ mây trắng hoạt hình (Sử dụng withValues thay withOpacity để tránh warning deprecation)
     final Paint cloudPaint = Paint()..color = Colors.white.withValues(alpha: 0.4);
     canvas.drawCircle(Offset(size.width * 0.15, 60), 25, cloudPaint);
     canvas.drawCircle(Offset(size.width * 0.22, 55), 35, cloudPaint);
