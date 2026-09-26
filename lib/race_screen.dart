@@ -21,9 +21,10 @@ class _RaceScreenState extends State<RaceScreen> {
   double _userBalance = 0.0;
   bool _isDataLoaded = false;
 
+  // Cập nhật lại icon cho xe màu xanh thành icon ô tô (Icons.directions_car)
   final List<Map<String, dynamic>> _racerUI = [
     {'color': Colors.redAccent, 'icon': Icons.directions_car_filled},
-    {'color': Colors.lightBlueAccent, 'icon': Icons.sports_motorsports},
+    {'color': Colors.lightBlueAccent, 'icon': Icons.directions_car},
     {'color': Colors.amberAccent, 'icon': Icons.electric_car},
   ];
 

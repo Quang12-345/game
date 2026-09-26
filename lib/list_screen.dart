@@ -114,6 +114,19 @@ class _ListScreenState extends State<ListScreen> {
     });
   }
 
+  Color _getCarColor(int id) {
+    switch (id) {
+      case 0:
+        return Colors.redAccent;    // Xe 01 (Đỏ)
+      case 1:
+        return Colors.blueAccent;   // Xe 02 (Xanh)
+      case 2:
+        return Colors.yellowAccent; // Xe 03 (Vàng)
+      default:
+        return Colors.cyanAccent;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -198,7 +211,7 @@ class _ListScreenState extends State<ListScreen> {
                           ),
 
                           // Icon / Tên xe & Odds
-                          const Icon(Icons.directions_car, size: 36, color: Colors.cyanAccent),
+                          Icon(Icons.directions_car, size: 36, color: _getCarColor(item.id)),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
