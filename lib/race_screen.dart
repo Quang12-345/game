@@ -16,7 +16,6 @@ class _RaceScreenState extends State<RaceScreen> {
   int? _winnerIndex;
   Timer? _timer;
 
-  // Cấu hình 3 nhân vật/xe đua phong cách Hoạt hình
   final List<Map<String, dynamic>> _racers = [
     {'name': 'Xe 1 - Đỏ', 'color': Colors.redAccent, 'icon': Icons.directions_car_filled},
     {'name': 'Xe 2 - Xanh', 'color': Colors.lightBlueAccent, 'icon': Icons.sports_motorsports},
@@ -32,23 +31,32 @@ class _RaceScreenState extends State<RaceScreen> {
   }
 
   void _startRace() {
+    _timer?.cancel();
+
     setState(() {
       _carPositions = [0.0, 0.0, 0.0];
       _isRacing = true;
       _winnerIndex = null;
     });
 
+    // Phát âm thanh bất đồng bộ không làm ngắt Timer
     AudioManager().playStartSound().catchError((e) {
-      debugPrint("Lỗi âm thanh start: $e");
+      debugPrint("Lỗi phát âm thanh start: $e");
     });
 
-    _timer?.cancel();
+    // Kích hoạt Timer chạy đua liên tục
     _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
-      if (!mounted) return;
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
       setState(() {
         for (int i = 0; i < 3; i++) {
           if (_carPositions[i] < 1.0) {
-            _carPositions[i] += Random().nextDouble() * 0.02 + 0.008;
+            // Tăng khoảng cách ngẫu nhiên từ 0.015 đến 0.035
+            _carPositions[i] += Random().nextDouble() * 0.02 + 0.015;
+
             if (_carPositions[i] >= 1.0) {
               _carPositions[i] = 1.0;
               if (_winnerIndex == null) {
@@ -65,12 +73,13 @@ class _RaceScreenState extends State<RaceScreen> {
   void _finishRace() {
     _timer?.cancel();
     if (!mounted) return;
+
     setState(() {
       _isRacing = false;
     });
 
     AudioManager().playWinSound().catchError((e) {
-      debugPrint("Lỗi âm thanh win: $e");
+      debugPrint("Lỗi phát âm thanh win: $e");
     });
 
     _showResultDialog();
@@ -136,22 +145,18 @@ class _RaceScreenState extends State<RaceScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. TỰ VẼ HÌNH NỀN TRƯỜNG ĐUA SÂN CỎ 2D CARTOON
           CustomPaint(
             size: Size.infinite,
             painter: CartoonRaceTrackPainter(),
           ),
-
-          // 2. PHẦN GIAO DIỆN CHÍNH
           SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 15),
-                // TIÊU ĐỀ HOẠT HÌNH GO!
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.orange, // 👈 Đã sửa Colors.orangeBold -> Colors.orange
+                    color: Colors.orange,
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(color: Colors.white, width: 3),
                     boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
@@ -161,14 +166,12 @@ class _RaceScreenState extends State<RaceScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
-                      fontWeight: FontWeight.w900, // 👈 Đã sửa FontWeight.black -> FontWeight.w900
+                      fontWeight: FontWeight.w900,
                       letterSpacing: 1.5,
                     ),
                   ),
                 ),
                 const SizedBox(height: 25),
-
-                // KHU VỰC 3 LÀN ĐƯỜNG ĐUA
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -186,7 +189,6 @@ class _RaceScreenState extends State<RaceScreen> {
     );
   }
 
-  // LÀN ĐƯỜNG ĐUA HOẠT HÌNH CÓ CỔNG VẠCH ĐÍCH CỜ CARO
   Widget _buildCartoonLane(int index) {
     double progress = _carPositions[index];
     var racer = _racers[index];
@@ -194,14 +196,13 @@ class _RaceScreenState extends State<RaceScreen> {
     return Container(
       height: 90,
       decoration: BoxDecoration(
-        color: const Color(0xFFD7CCC8), // Màu đất trường đua
+        color: const Color(0xFFD7CCC8),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF5D4037), width: 3), // Rào gỗ
+        border: Border.all(color: const Color(0xFF5D4037), width: 3),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 4))],
       ),
       child: Stack(
         children: [
-          // Vạch đường đứt nét
           Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -211,8 +212,6 @@ class _RaceScreenState extends State<RaceScreen> {
               ),
             ),
           ),
-
-          // CỔNG VẠCH ĐÍCH CỜ CARO ĐỎ - TRẮNG
           Positioned(
             right: 15,
             top: 0,
@@ -228,8 +227,6 @@ class _RaceScreenState extends State<RaceScreen> {
               ),
             ),
           ),
-
-          // TÊN XE
           Positioned(
             left: 10,
             top: 6,
@@ -249,8 +246,6 @@ class _RaceScreenState extends State<RaceScreen> {
               ),
             ),
           ),
-
-          // XE ĐUA HOẠT HÌNH DI CHUYỂN
           LayoutBuilder(
             builder: (context, constraints) {
               double maxDistance = constraints.maxWidth - 65;
@@ -282,20 +277,16 @@ class _RaceScreenState extends State<RaceScreen> {
   }
 }
 
-// BỘ VẼ HÌNH NỀN TRƯỜNG ĐUA SÂN CỎ BẰNG CODE FLUTTER
 class CartoonRaceTrackPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Nền cỏ xanh tươi
     final Paint grassPaint = Paint()..color = const Color(0xFF4CAF50);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), grassPaint);
 
-    // 2. Vẽ đồi núi / Lùm cây hoạt hình phía trên
     final Paint hillPaint = Paint()..color = const Color(0xFF388E3C);
     canvas.drawCircle(Offset(size.width * 0.2, 0), 120, hillPaint);
     canvas.drawCircle(Offset(size.width * 0.8, 0), 150, hillPaint);
 
-    // 3. Vẽ mây trắng hoạt hình (Sử dụng withValues thay withOpacity để tránh warning deprecation)
     final Paint cloudPaint = Paint()..color = Colors.white.withValues(alpha: 0.4);
     canvas.drawCircle(Offset(size.width * 0.15, 60), 25, cloudPaint);
     canvas.drawCircle(Offset(size.width * 0.22, 55), 35, cloudPaint);

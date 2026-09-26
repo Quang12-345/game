@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'list_screen.dart'; // Import màn hình danh sách cược tại đây
+import 'main_screen.dart'; // Import Trang chủ tại đây
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -11,16 +11,13 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // Controller Đăng nhập
   final TextEditingController _loginUserCtrl = TextEditingController();
   final TextEditingController _loginPassCtrl = TextEditingController();
 
-  // Controller Đăng ký
   final TextEditingController _regUserCtrl = TextEditingController();
   final TextEditingController _regPassCtrl = TextEditingController();
   final TextEditingController _regConfirmPassCtrl = TextEditingController();
 
-  // Lưu tài khoản mẫu
   final Map<String, String> _users = {'user': '123456'};
 
   @override
@@ -52,11 +49,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     if (_users.containsKey(username) && _users[username] == password) {
       _showMessage('Đăng nhập thành công!');
 
-      // Chuyển trực tiếp sang ListScreen thay vì gọi route chuỗi '/main' gây crash app
+      // SỬA TẠI ĐÂY: Chuyển sang MainScreen (Trang chủ) thay vì ListScreen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const ListScreen(),
+          builder: (context) => const MainScreen(),
         ),
       );
     } else {
@@ -87,13 +84,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     _users[username] = password;
     _showMessage('Đăng ký thành công! Vui lòng nhập mật khẩu để đăng nhập.');
 
-    // Tự điền thông tin vừa đăng ký vào form Đăng nhập và tự chuyển tab
     _loginUserCtrl.text = username;
     _loginPassCtrl.clear();
     _regUserCtrl.clear();
     _regPassCtrl.clear();
     _regConfirmPassCtrl.clear();
-    _tabController.animateTo(0); // Chuyển về tab Đăng nhập
+    _tabController.animateTo(0);
   }
 
   void _showMessage(String msg) {
